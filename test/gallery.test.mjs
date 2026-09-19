@@ -57,8 +57,25 @@ test('Supabase schema, SDK, admin, media lifecycle and failure handling', { time
     assert.equal((await upload('Fake', Buffer.from('not an image'))).status, 400);
     assert.equal((await upload('Too large', Buffer.alloc(MAX_UPLOAD_BYTES + 1))).status, 400);
     assert.equal((await fetch(base + '/api/categories', { method: 'POST', headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Blocked' }) })).status, 403);
+    // ISO BMFF MP4 signature fixture: validates video upload/metadata, not playback.
+    const mp4 = Buffer.from('00000018667479706d703432000000006d70343269736f6d', 'hex');
+    const threeGP = Buffer.from('000000186674797033677035000000003367703569736f6d', 'hex');
+    const unsupportedVideo = await upload('3GP test', threeGP, 'clip.3gp');
+    assert.equal(unsupportedVideo.status, 400);
+    assert.match((await unsupportedVideo.json()).error, /3GP videos are not supported.*Convert/);
+    const videoUpload = await upload('Video test', mp4, 'clip.mp4');
+    assert.equal(videoUpload.status, 201);
+    const videoId = (await videoUpload.json()).id;
+    const videos = await (await request('/api/media?type=video')).json();
+    assert.equal(videos.total, 1);
+    assert.equal(videos.items[0].id, videoId);
+    assert.equal(fixture.files.get(videos.items[0].filename).contentType, 'video/mp4');
+    assert.deepEqual(Buffer.from(await (await fetch(videos.items[0].url)).arrayBuffer()), mp4);
+    assert.equal((await request('/api/media/' + videoId, { method: 'DELETE' })).status, 200);
     fixture.faults.upload = true;
-    assert.equal((await upload('Storage failure')).status, 503);
+    const failedUpload = await upload('Storage failure');
+    assert.equal(failedUpload.status, 503);
+    assert.match((await failedUpload.json()).error, /saving file to Supabase Storage.*Reference:/);
     fixture.faults.upload = false;
     fixture.faults.insert = true;
     const before = fixture.files.size;

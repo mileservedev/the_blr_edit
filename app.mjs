@@ -88,19 +88,27 @@ export async function createApp({ store, email, password, secret, tempDir, produ
   app.post('/api/media', auth, (req, res, next) => {
     if (uploading) return res.status(429).json({ error: 'Another upload is in progress. Please try again shortly.' });
     uploading = true;
+    req.uploadReference = randomBytes(6).toString('hex');
+    req.uploadStage = 'receiving file';
+    console.log('Upload started:', req.uploadReference);
     // Hold the slot until storage transfer and cleanup finish, even if the browser disconnects.
     upload.single('file')(req, res, async parseError => {
       try {
         if (parseError) throw parseError;
+        req.uploadStage = 'validating file';
         const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
         if (!req.file || !title || title.length > 120 || !validId(req.body.category_id)) {
           throw problem(400, 'Choose a category, file, and title of 1–120 characters.');
         }
         if (!await store.category(Number(req.body.category_id))) throw problem(400, 'Choose an existing category.');
         const detected = await fileTypeFromFile(req.file.path).catch(() => null);
+        if (['video/3gpp', 'video/3gpp2'].includes(detected?.mime)) throw problem(400, '3GP videos are not supported. Convert the video to MP4 (H.264 video and AAC audio), then upload it again. Renaming the file is not enough.');
         if (!allowed.has(detected?.mime)) throw problem(400, 'Upload a JPEG, PNG, WebP, MP4, or WebM file.');
         const filename = `${randomBytes(24).toString('hex')}.${detected.ext}`;
+        req.uploadStage = 'saving file to Supabase Storage';
+        console.log('Upload validated:', req.uploadReference, 'bytes:', req.file.size, 'format:', detected.mime);
         await store.upload(filename, req.file.path, detected.mime);
+        req.uploadStage = 'saving gallery record';
         let result;
         try {
           result = await store.addMedia({ title, category_id: Number(req.body.category_id), filename, type: allowed.get(detected.mime) });
@@ -113,6 +121,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
           } else console.error('Verify media row/storage object after uncertain write:', filename);
           throw error;
         }
+        console.log('Upload complete:', req.uploadReference, 'media:', result.id);
         res.status(201).json(result);
       } catch (error) { next(error); }
       finally {
@@ -134,6 +143,10 @@ export async function createApp({ store, email, password, secret, tempDir, produ
   app.get('/admin', (req, res) => res.sendFile(path.join(root, 'public/index.html')));
   app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
   app.use((error, req, res, next) => {
+    if (req.uploadReference) {
+      const code = String(error.code || error.name || 'unknown');
+      console.error('Upload failed:', req.uploadReference, 'stage:', req.uploadStage, 'code:', /^[a-zA-Z0-9_]{1,64}$/.test(code) ? code : 'unknown', 'upstream status:', Number(error.statusCode || error.status) || 'unknown');
+    }
     if (error instanceof multer.MulterError) return res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'File exceeds the 50 MB upload limit.' : 'Invalid upload. Choose one file.' });
     if (error.code === '23505') return res.status(409).json({ error: 'That name already exists.' });
     if (['23503', '23001'].includes(error.code)) return res.status(409).json({ error: req.method === 'DELETE' ? 'Delete the media in this category first.' : 'The selected category no longer exists.' });
@@ -141,7 +154,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
     if (status >= 400 && status < 500) return res.status(status).json({ error: error.message });
     // Do not log SDK request objects, headers, or credentials.
     console.error('Gallery request failed:', error.code || error.name || 'upstream');
-    res.status(503).json({ error: 'Storage or database is unavailable. Please check your Supabase project status and try again.' });
+    res.status(503).json({ error: req.uploadReference ? `Upload failed while ${req.uploadStage}. Reference: ${req.uploadReference}. Check the matching Hostinger runtime log.` : 'Storage or database is unavailable. Please check your Supabase project status and try again.' });
   });
   return app;
 }
