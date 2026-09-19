@@ -20,7 +20,7 @@ This app uses the Supabase HTTPS APIs; a PostgreSQL connection URL or database p
 
 ## 2. Configure Hostinger
 
-Use your existing Node.js website for `mileserve.in`, connected to GitHub repository `mileservedev/the_blr_edit`, branch `supabase-free` for this update. Configure Supabase first, then select this branch in Hostinger (or merge it into `main` when ready).
+Use your existing Node.js website for `mileserve.in`, connected to GitHub repository `mileservedev/the_blr_edit`, branch `main`. Configure Supabase and the required environment variables before deploying.
 
 | Setting | Value |
 |---|---|
