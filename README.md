@@ -14,7 +14,7 @@ The public gallery starts empty. Admin credentials remain environment variables;
 2. Wait until the project is ready. Open **SQL Editor → New query**.
 3. Paste the entire contents of [`supabase/setup.sql`](supabase/setup.sql), then click **Run**. This creates three tables, search functions, permissions and the public `gallery` bucket with a 50 MB limit. It is safe to rerun without deleting collection data.
 4. Find the **Project URL** in the Connect dialog or project API settings; it looks like `https://PROJECT_REF.supabase.co`.
-5. Under **Settings → API Keys**, copy or create a **secret key** starting with `sb_secret_`. Set this as `SUPABASE_SECRET_KEY` on the server. Do not use a publishable/anon key. Do not put a secret key in source code, browser JavaScript, GitHub, screenshots, or chat messages.
+5. Under **Settings → API Keys**, copy or create a **secret key** starting with `sb_secret_`. Set this as `SUPABASE_SECRET_KEY` on the server. A legacy `service_role` JWT is also accepted under `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY`. Do not use a publishable/anon key. Do not put a secret key in source code, browser JavaScript, GitHub, screenshots, or chat messages.
 
 This app uses the Supabase HTTPS APIs; a PostgreSQL connection URL or database password is not required in Hostinger.
 

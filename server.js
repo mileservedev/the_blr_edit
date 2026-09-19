@@ -25,18 +25,11 @@ const { tmpdir } = require('node:os');
 const path = require('node:path');
 
 async function initialize() {
-  const { ADMIN_EMAIL: email, ADMIN_PASSWORD: password, SESSION_SECRET: secret, SUPABASE_URL: url, SUPABASE_SECRET_KEY: key } = process.env;
+  const { ADMIN_EMAIL: email, ADMIN_PASSWORD: password, SESSION_SECRET: secret } = process.env;
   if (!email || !password || password.length < 12 || !secret || secret.length < 32 || password.startsWith('replace-') || secret.startsWith('replace-')) {
     throw new Error('Configure ADMIN_EMAIL, ADMIN_PASSWORD (12+ characters) and SESSION_SECRET (32+ random characters).');
   }
-  if (!url || !key || !key.startsWith('sb_secret_') || key.includes('replace-')) {
-    throw new Error('Configure SUPABASE_URL and a server-only SUPABASE_SECRET_KEY (sb_secret_...) in your environment.');
-  }
-  let parsedURL;
-  try { parsedURL = new URL(url); } catch { throw new Error('SUPABASE_URL must be a valid HTTPS project origin.'); }
-  if (parsedURL.protocol !== 'https:' || parsedURL.username || parsedURL.password || parsedURL.pathname !== '/' || parsedURL.search || parsedURL.hash) {
-    throw new Error('SUPABASE_URL must be the HTTPS project origin from Supabase, without a path or credentials.');
-  }
+  const { url, key } = require('./lib/config.cjs').readSupabaseConfig(process.env);
   const [{ createApp }, { createSupabaseStore }] = await Promise.all([import('./app.mjs'), import('./lib/supabase-store.mjs')]);
   const store = createSupabaseStore(url, key);
   tempDir = await mkdtemp(path.join(tmpdir(), 'blr-upload-'));
@@ -58,7 +51,7 @@ async function initialize() {
 }
 setImmediate(() => initialize().catch(error => {
   // Only known configuration messages are exposed; never print SDK objects/secrets.
-  console.error('Application initialization failed:', /^(Configure |SUPABASE_URL)/.test(error.message) ? error.message : 'Check runtime configuration, installed dependencies and temporary-directory permissions.');
+  console.error('Application initialization failed:', (error.code === 'SUPABASE_CONFIG' || /^(Configure |SUPABASE_URL)/.test(error.message)) ? error.message : 'Check runtime configuration, installed dependencies and temporary-directory permissions.');
 }));
 for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => {
   stopping = true;
