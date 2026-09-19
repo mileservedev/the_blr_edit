@@ -53,7 +53,7 @@ node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 
 Set `TRUST_PROXY=1` only if Hostinger confirms that exactly one trusted reverse proxy is in front of the app. This controls the client IP used for login rate limiting. Remove old `DATA_DIR`, `UPLOAD_DIR`, and `MAX_UPLOAD_MB` settings; they are no longer used. The upload cap is fixed at 50,000,000 bytes for this free-plan configuration. Ensure Hostinger accepts requests slightly larger than 50 MB (multipart overhead) and allows time for the storage transfer.
 
-Run the SQL setup before deploying: the server checks the database/bucket at startup and refuses to start if configuration is incomplete. Redeploy, enable HTTPS, then visit `https://mileserve.in/admin`. Sign in using your `ADMIN_EMAIL` and `ADMIN_PASSWORD`, create a category, and upload a photo/video. Restart or redeploy once and confirm the content persists.
+Run the SQL setup before deploying. The server calls listen() immediately for Hostinger, then loads the app and checks Supabase in the background. Until ready, requests receive HTTP 503 with a Retry-After header. Failed Supabase checks retry every 30 seconds; invalid environment settings require a restart after correction. Redeploy, enable HTTPS, then visit `https://mileserve.in/admin`. Sign in using your `ADMIN_EMAIL` and `ADMIN_PASSWORD`, create a category, and upload a photo/video. Restart or redeploy once and confirm the content persists.
 
 ## Free-plan limits and operation
 
