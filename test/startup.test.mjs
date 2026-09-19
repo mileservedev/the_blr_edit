@@ -4,7 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 
 test('Hostinger listener starts before Supabase or application initialization', { timeout: 10000 }, async () => {
-  const child = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT: '0', ADMIN_EMAIL: '', ADMIN_PASSWORD: '', SESSION_SECRET: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['app.js'], { env: { ...process.env, PORT: '0', ADMIN_EMAIL: '', ADMIN_PASSWORD: '', SESSION_SECRET: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
   let errors = '';
   child.stderr.on('data', data => errors += data);
   try {
@@ -46,7 +46,7 @@ test('CommonJS hosting launcher intercepts listen synchronously during require',
       }
       return originalLoad.call(this, name, ...args);
     };
-    require('./server.js');
+    require('./app.js');
     assert.equal(called, true, 'listen must run before require returns');
     console.log('SYNCHRONOUS_LISTENER_OK');
     process.exit(0);
