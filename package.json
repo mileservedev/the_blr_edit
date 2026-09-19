@@ -2,14 +2,14 @@
   "name": "the-blr-edit",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
+  "type": "commonjs",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
     "dev": "node --env-file-if-exists=.env --watch server.js",
-    "build": "node --check server.js && node --check app.js && node --check lib/supabase-store.js && node --check public/app.js",
+    "build": "node --check server.js && node --check app.mjs && node --check lib/supabase-store.mjs && node --check public/app.js",
     "test": "node --test"
   },
   "dependencies": {
@@ -22,5 +22,6 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8"
-  }
+  },
+  "main": "server.js"
 }

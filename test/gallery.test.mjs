@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createApp, MAX_UPLOAD_BYTES } from '../app.js';
-import { createSupabaseStore } from '../lib/supabase-store.js';
-import { startSupabaseFixture } from '../test-support/supabase-fixture.js';
+import { createApp, MAX_UPLOAD_BYTES } from '../app.mjs';
+import { createSupabaseStore } from '../lib/supabase-store.mjs';
+import { startSupabaseFixture } from '../test-support/supabase-fixture.mjs';
 
 test('Supabase schema, SDK, admin, media lifecycle and failure handling', { timeout: 120000 }, async () => {
   const fixture = await startSupabaseFixture();
