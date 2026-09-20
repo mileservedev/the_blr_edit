@@ -16,6 +16,7 @@ create table if not exists public.media (
   created_at timestamptz not null default now()
 );
 alter table public.media add column if not exists instagram_url text;
+alter table public.media add column if not exists youtube_url text;
 create table if not exists public.media_engagement (
   media_id integer not null references public.media(id) on delete cascade,
   visitor text not null check (length(visitor) = 64),
@@ -116,15 +117,15 @@ end;
 $$;
 create or replace function public.gallery_open(item_id integer, browser_id text)
 returns jsonb language plpgsql security invoker set search_path = '' as $$
-declare changed integer; instagram text;
+declare changed integer; instagram text; youtube text;
 begin
-  select instagram_url into instagram from public.media where id = item_id;
+  select instagram_url, youtube_url into instagram, youtube from public.media where id = item_id;
   if not found then return null; end if;
   insert into public.media_engagement(media_id, visitor, viewed) values(item_id, browser_id, true)
   on conflict (media_id, visitor) do update set viewed = true
   where not public.media_engagement.viewed;
   get diagnostics changed = row_count;
-  return jsonb_build_object('first_view', changed > 0, 'instagram_url', instagram);
+  return jsonb_build_object('first_view', changed > 0, 'instagram_url', instagram, 'youtube_url', youtube);
 end;
 $$;
 revoke all on function public.gallery_engagement(integer[], text), public.gallery_like(integer, text, boolean), public.gallery_open(integer, text) from public, anon, authenticated;
