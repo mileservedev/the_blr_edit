@@ -15,6 +15,17 @@ create table if not exists public.media (
   type text not null check (type in ('photo', 'video')),
   created_at timestamptz not null default now()
 );
+alter table public.media add column if not exists instagram_url text;
+create table if not exists public.media_engagement (
+  media_id integer not null references public.media(id) on delete cascade,
+  visitor text not null check (length(visitor) = 64),
+  liked boolean not null default false,
+  viewed boolean not null default false,
+  primary key (media_id, visitor)
+);
+alter table public.media_engagement enable row level security;
+revoke all on public.media_engagement from anon, authenticated;
+grant select, insert, update, delete on public.media_engagement to service_role;
 create index if not exists media_category on public.media(category_id);
 create table if not exists public.sessions (
   token text primary key,
@@ -83,4 +94,39 @@ values ('gallery', 'gallery', true, 50000000,
   array['image/jpeg','image/png','image/webp','video/mp4','video/webm'])
 on conflict (id) do update set public = excluded.public,
   file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+create or replace function public.gallery_engagement(item_ids integer[], browser_id text)
+returns table(media_id integer, likes bigint, liked boolean, viewed boolean)
+language sql stable security invoker set search_path = '' as $$
+  select m.id, count(e.visitor) filter (where e.liked),
+    coalesce(bool_or(e.liked) filter (where e.visitor = browser_id), false),
+    coalesce(bool_or(e.viewed) filter (where e.visitor = browser_id), false)
+  from public.media m left join public.media_engagement e on e.media_id = m.id
+  where m.id = any(item_ids) group by m.id;
+$$;
+create or replace function public.gallery_like(item_id integer, browser_id text, desired_like boolean)
+returns jsonb language plpgsql security invoker set search_path = '' as $$
+declare result jsonb;
+begin
+  insert into public.media_engagement(media_id, visitor, liked) values(item_id, browser_id, desired_like)
+  on conflict (media_id, visitor) do update set liked = excluded.liked;
+  select to_jsonb(e) into result from public.gallery_engagement(array[item_id], browser_id) e;
+  return result;
+end;
+$$;
+create or replace function public.gallery_open(item_id integer, browser_id text)
+returns jsonb language plpgsql security invoker set search_path = '' as $$
+declare changed integer; instagram text;
+begin
+  select instagram_url into instagram from public.media where id = item_id;
+  if not found then return null; end if;
+  insert into public.media_engagement(media_id, visitor, viewed) values(item_id, browser_id, true)
+  on conflict (media_id, visitor) do update set viewed = true
+  where not public.media_engagement.viewed;
+  get diagnostics changed = row_count;
+  return jsonb_build_object('first_view', changed > 0, 'instagram_url', instagram);
+end;
+$$;
+revoke all on function public.gallery_engagement(integer[], text), public.gallery_like(integer, text, boolean), public.gallery_open(integer, text) from public, anon, authenticated;
+grant execute on function public.gallery_engagement(integer[], text), public.gallery_like(integer, text, boolean), public.gallery_open(integer, text) to service_role;
 commit;
