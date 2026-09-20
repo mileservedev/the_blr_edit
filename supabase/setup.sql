@@ -17,6 +17,8 @@ create table if not exists public.media (
 );
 alter table public.media add column if not exists instagram_url text;
 alter table public.media add column if not exists youtube_url text;
+alter table public.media add column if not exists description text not null default '' check (length(description) <= 2000);
+alter table public.media add column if not exists photos jsonb not null default '[]'::jsonb check (jsonb_typeof(photos) = 'array' and jsonb_array_length(photos) <= 8);
 create table if not exists public.media_engagement (
   media_id integer not null references public.media(id) on delete cascade,
   visitor text not null check (length(visitor) = 64),
