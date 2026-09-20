@@ -105,3 +105,7 @@ Cards and the viewer show upload dates. Visitors can like content using a signed
 Every opening displays the uploaded media locally, including repeat views. Add an optional Instagram link during upload or on an existing admin card to show Watch on Instagram on the card and in the viewer. The link opens a new tab only when clicked. If Instagram is absent, a provided YouTube link shows Watch on YouTube instead.
 
 YouTube supports HTTPS watch, Shorts, live, embed and youtu.be video links. Editing one link through the API preserves the other. Existing engagement data remains intact. This change needs no SQL migration or new environment variables.
+
+## Cafe discoveries with multiple photos
+
+Run the updated `supabase/setup.sql` before deploying this feature. It adds description and photos fields without deleting existing content. Upload one main video or photo and up to eight additional JPEG, PNG or WebP photos, with a combined limit of 50 MB. Add up to 2,000 characters describing the place or experience. The viewer displays the main media, description and additional photos together. Admin cards allow editing descriptions on existing posts. Deleting a discovery removes its main file and all additional photos.

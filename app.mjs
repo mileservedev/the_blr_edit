@@ -109,7 +109,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
       type_filter: type, requested_page: Math.min(2147483647, Math.max(1, parseInt(req.query.page, 10) || 1)),
     }, req.visitor));
   });
-  const upload = multer({ dest: tempDir, limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 4, fieldSize: 2048 } });
+  const upload = multer({ dest: tempDir, limits: { fileSize: MAX_UPLOAD_BYTES, files: 9, fields: 5, fieldSize: 8192 } });
   let uploading = false;
   app.post('/api/media', auth, (req, res, next) => {
     if (uploading) return res.status(429).json({ error: 'Another upload is in progress. Please try again shortly.' });
@@ -118,43 +118,60 @@ export async function createApp({ store, email, password, secret, tempDir, produ
     req.uploadStage = 'receiving file';
     console.log('Upload started:', req.uploadReference);
     // Hold the slot until storage transfer and cleanup finish, even if the browser disconnects.
-    upload.single('file')(req, res, async parseError => {
+    upload.fields([{ name: 'file', maxCount: 1 }, { name: 'photos', maxCount: 8 }])(req, res, async parseError => {
       let uploadResult, uploadError;
+      const savedFiles = [];
+      let uncertainWrite = false;
       try {
         if (parseError) throw parseError;
         req.uploadStage = 'validating file';
         const instagram_url = instagramURL(req.body.instagram_url);
         const youtube_url = youtubeURL(req.body.youtube_url);
+        req.file = req.files?.file?.[0];
+        const description = typeof req.body.description === 'string' ? req.body.description.trim() : '';
+        if (description.length > 2000) throw problem(400, 'Description must be at most 2,000 characters.');
         const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
         if (!req.file || !title || title.length > 120 || !validId(req.body.category_id)) {
           throw problem(400, 'Choose a category, file, and title of 1–120 characters.');
         }
         if (!await store.category(Number(req.body.category_id))) throw problem(400, 'Choose an existing category.');
-        const detected = await fileTypeFromFile(req.file.path).catch(() => null);
-        if (['video/3gpp', 'video/3gpp2'].includes(detected?.mime)) throw problem(400, '3GP videos are not supported. Convert the video to MP4 (H.264 video and AAC audio), then upload it again. Renaming the file is not enough.');
-        if (!allowed.has(detected?.mime)) throw problem(400, 'Upload a JPEG, PNG, WebP, MP4, or WebM file.');
-        const filename = `${randomBytes(24).toString('hex')}.${detected.ext}`;
-        req.uploadStage = 'saving file to Supabase Storage';
-        console.log('Upload validated:', req.uploadReference, 'bytes:', req.file.size, 'format:', detected.mime);
-        await store.upload(filename, req.file.path, detected.mime);
+        const files = [req.file, ...(req.files?.photos || [])];
+        if (files.reduce((sum, file) => sum + file.size, 0) > MAX_UPLOAD_BYTES) throw problem(400, 'Keep the combined upload within 50 MB.');
+        const validated = [];
+        for (const [index, file] of files.entries()) {
+          const detected = await fileTypeFromFile(file.path).catch(() => null);
+          if (['video/3gpp', 'video/3gpp2'].includes(detected?.mime)) throw problem(400, '3GP videos are not supported. Convert to MP4 (H.264/AAC) before uploading.');
+          if (!allowed.has(detected?.mime)) throw problem(400, 'Upload a JPEG, PNG, WebP, MP4, or WebM file.');
+          if (index > 0 && allowed.get(detected.mime) !== 'photo') throw problem(400, 'Additional photos must be JPEG, PNG or WebP.');
+          validated.push({ file, detected, filename: `${randomBytes(24).toString('hex')}.${detected.ext}` });
+        }
+        req.uploadStage = 'saving files to Supabase Storage';
+        for (const entry of validated) {
+          await store.upload(entry.filename, entry.file.path, entry.detected.mime);
+          savedFiles.push(entry.filename);
+        }
+        const { filename, detected } = validated[0];
         req.uploadStage = 'saving gallery record';
         let result;
         try {
-          result = await store.addMedia({ title, category_id: Number(req.body.category_id), filename, type: allowed.get(detected.mime), instagram_url, youtube_url });
+          result = await store.addMedia({ title, category_id: Number(req.body.category_id), filename, type: allowed.get(detected.mime), instagram_url, youtube_url, description, photos: savedFiles.slice(1) });
         } catch (error) {
-          // On a definitive DB rejection, remove the uploaded object. A network failure
-          // may have committed the row: retain the file for reconciliation in that case.
-          if (/^\d{5}$/.test(error.code || '')) {
-            try { await store.removeFile(filename); }
-            catch { console.error('Orphaned storage object requires cleanup:', filename); }
-          } else console.error('Verify media row/storage object after uncertain write:', filename);
+          // A network failure may have committed the row; preserve all objects then.
+          uncertainWrite = !/^\d{5}$/.test(error.code || '');
+          if (uncertainWrite) console.error('Verify media row/storage objects after uncertain write:', savedFiles.join(', '));
           throw error;
         }
         console.log('Upload complete:', req.uploadReference, 'media:', result.id);
         uploadResult = result;
-      } catch (error) { uploadError = error; }
+      } catch (error) {
+        uploadError = error;
+        if (!uncertainWrite) for (const filename of savedFiles) {
+          try { await store.removeFile(filename); }
+          catch { console.error('Orphaned storage object requires cleanup:', filename); }
+        }
+      }
       finally {
-        if (req.file?.path) await rm(req.file.path, { force: true }).catch(() => {});
+        for (const file of Object.values(req.files || {}).flat()) await rm(file.path, { force: true }).catch(() => {});
         uploading = false;
       }
       if (uploadError) next(uploadError);
@@ -186,6 +203,10 @@ export async function createApp({ store, email, password, secret, tempDir, produ
     const links = {};
     if (Object.hasOwn(req.body || {}, 'instagram_url')) links.instagram_url = instagramURL(req.body.instagram_url);
     if (Object.hasOwn(req.body || {}, 'youtube_url')) links.youtube_url = youtubeURL(req.body.youtube_url);
+    if (Object.hasOwn(req.body || {}, 'description')) {
+      if (typeof req.body.description !== 'string' || req.body.description.trim().length > 2000) throw problem(400, 'Description must be at most 2,000 characters.');
+      links.description = req.body.description.trim();
+    }
     if (!Object.keys(links).length) throw problem(400, 'Provide an Instagram or YouTube link field.');
     const result = await store.setLinks(Number(req.params.id), links);
     if (!result) throw problem(404, 'Media not found.');
@@ -196,7 +217,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
     const item = await store.media(Number(req.params.id));
     if (!item) throw problem(404, 'Media not found.');
     // Retain the row on a storage error, allowing the administrator to retry.
-    await store.removeFile(item.filename);
+    for (const filename of [item.filename, ...(item.photos || [])]) await store.removeFile(filename);
     await store.deleteMedia(item.id);
     res.json({ ok: true });
   });
@@ -208,7 +229,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
       const code = String(error.code || error.name || 'unknown');
       console.error('Upload failed:', req.uploadReference, 'stage:', req.uploadStage, 'code:', /^[a-zA-Z0-9_]{1,64}$/.test(code) ? code : 'unknown', 'upstream status:', Number(error.statusCode || error.status) || 'unknown');
     }
-    if (error instanceof multer.MulterError) return res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'File exceeds the 50 MB upload limit.' : 'Invalid upload. Choose one file.' });
+    if (error instanceof multer.MulterError) return res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'File exceeds the 50 MB upload limit.' : 'Choose one main photo or video and up to eight additional photos.' });
     if (error.code === '23505') return res.status(409).json({ error: 'That name already exists.' });
     if (['23503', '23001'].includes(error.code)) return res.status(409).json({ error: req.method === 'DELETE' ? 'Delete the media in this category first.' : 'The selected category no longer exists.' });
     const status = Number(error.status);

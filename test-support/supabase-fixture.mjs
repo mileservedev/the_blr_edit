@@ -67,7 +67,7 @@ export async function startSupabaseFixture() {
     } catch (e) { next(e); }
   });
   const columns = {
-    sessions: ['token', 'expires'], categories: ['id', 'name'], media: ['id', 'title', 'category_id', 'filename', 'type', 'created_at', 'instagram_url', 'youtube_url'],
+    sessions: ['token', 'expires'], categories: ['id', 'name'], media: ['id', 'title', 'category_id', 'filename', 'type', 'created_at', 'instagram_url', 'youtube_url', 'description', 'photos'],
   };
   app.all('/rest/v1/:table', async (req, res, next) => {
     try {
@@ -92,7 +92,7 @@ export async function startSupabaseFixture() {
         if (table === 'media' && faults.insert) throw Object.assign(new Error('Insert rejected'), { code: '23514' });
         const keys = Object.keys(req.body);
         if (!keys.every(c => columns[table].includes(c))) throw new Error('Invalid columns');
-        rows = (await db.query(`insert into public.${table} (${keys.join(',')}) values (${keys.map((_, i) => '$' + (i + 1)).join(',')}) returning *`, keys.map(k => req.body[k]))).rows;
+        rows = (await db.query(`insert into public.${table} (${keys.join(',')}) values (${keys.map((_, i) => '$' + (i + 1)).join(',')}) returning *`, keys.map(k => k === 'photos' ? JSON.stringify(req.body[k]) : req.body[k]))).rows;
       } else if (req.method === 'PATCH') {
         const keys = Object.keys(req.body);
         if (!keys.every(c => columns[table].includes(c))) throw new Error('Invalid columns');
