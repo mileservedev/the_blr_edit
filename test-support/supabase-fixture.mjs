@@ -67,7 +67,7 @@ export async function startSupabaseFixture() {
     } catch (e) { next(e); }
   });
   const columns = {
-    sessions: ['token', 'expires'], categories: ['id', 'name'], media: ['id', 'title', 'category_id', 'filename', 'type', 'created_at', 'instagram_url'],
+    sessions: ['token', 'expires'], categories: ['id', 'name'], media: ['id', 'title', 'category_id', 'filename', 'type', 'created_at', 'instagram_url', 'youtube_url'],
   };
   app.all('/rest/v1/:table', async (req, res, next) => {
     try {

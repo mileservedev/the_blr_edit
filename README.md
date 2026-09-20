@@ -107,3 +107,8 @@ Cards and the viewer show the original upload date in the visitor's local timezo
 Add an optional HTTPS Instagram link during upload, or use the admin card's Instagram link field to update existing content. The first opening in a browser displays media locally; subsequent openings navigate that tab to Instagram. An opening counts as a view, not completion of video playback. Content without an Instagram link continues opening locally. Signed-in administrators can preview locally without consuming a view or being redirected.
 
 This is a browser-based viewing experience, not DRM or account-level tracking: clearing cookies, using private browsing, switching devices, or rotating SESSION_SECRET resets visitor identity. Public Supabase URLs remain directly accessible. The database cannot establish a unique human identity without user accounts. Instagram availability and any Instagram login requirement are outside this app's control.
+
+
+### YouTube fallback for repeat views
+
+Rerun the latest `supabase/setup.sql` before deploying this update. It adds `media.youtube_url` without deleting existing content and updates the first-view function. Add a YouTube link during upload or edit it on an existing admin card. The first opening remains local; subsequent openings use Instagram when present, otherwise YouTube. Without either link, content remains local. Supports HTTPS YouTube watch, Shorts, live, embed and youtu.be video URLs. Editing one link through the API preserves the other. No new environment variables are required.

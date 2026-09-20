@@ -23,6 +23,17 @@ function instagramURL(value) {
   if (url.protocol !== 'https:' || !['instagram.com', 'www.instagram.com'].includes(url.hostname) || url.username || url.password || url.port) throw problem(400, 'Use an https://instagram.com or https://www.instagram.com link.');
   return url.href;
 }
+function youtubeURL(value) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || value.length > 2048) throw problem(400, 'Enter a valid YouTube link.');
+  let url;
+  try { url = new URL(value.trim()); } catch { throw problem(400, 'Enter a full YouTube link beginning with https://.'); }
+  if (url.protocol !== 'https:' || !['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'].includes(url.hostname) || url.username || url.password || url.port) throw problem(400, 'Use an HTTPS youtube.com or youtu.be link.');
+  // Accept video/Shorts links, not arbitrary YouTube redirect endpoints.
+  const videoId = url.hostname === 'youtu.be' ? url.pathname.slice(1) : url.pathname === '/watch' ? url.searchParams.get('v') : /^\/(?:shorts|embed|live)\/([a-zA-Z0-9_-]{11})\/?$/.exec(url.pathname)?.[1];
+  if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId || '')) throw problem(400, 'Enter a YouTube video, Shorts, live, or youtu.be video link.');
+  return url.href;
+}
 const validId = value => /^\d+$/.test(String(value)) && Number(value) > 0 && Number(value) <= 2147483647;
 
 export async function createApp({ store, email, password, secret, tempDir, production = false, trustProxy = false }) {
@@ -98,7 +109,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
       type_filter: type, requested_page: Math.min(2147483647, Math.max(1, parseInt(req.query.page, 10) || 1)),
     }, req.visitor));
   });
-  const upload = multer({ dest: tempDir, limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 3, fieldSize: 2048 } });
+  const upload = multer({ dest: tempDir, limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 4, fieldSize: 2048 } });
   let uploading = false;
   app.post('/api/media', auth, (req, res, next) => {
     if (uploading) return res.status(429).json({ error: 'Another upload is in progress. Please try again shortly.' });
@@ -108,10 +119,12 @@ export async function createApp({ store, email, password, secret, tempDir, produ
     console.log('Upload started:', req.uploadReference);
     // Hold the slot until storage transfer and cleanup finish, even if the browser disconnects.
     upload.single('file')(req, res, async parseError => {
+      let uploadResult, uploadError;
       try {
         if (parseError) throw parseError;
         req.uploadStage = 'validating file';
         const instagram_url = instagramURL(req.body.instagram_url);
+        const youtube_url = youtubeURL(req.body.youtube_url);
         const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
         if (!req.file || !title || title.length > 120 || !validId(req.body.category_id)) {
           throw problem(400, 'Choose a category, file, and title of 1–120 characters.');
@@ -127,7 +140,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
         req.uploadStage = 'saving gallery record';
         let result;
         try {
-          result = await store.addMedia({ title, category_id: Number(req.body.category_id), filename, type: allowed.get(detected.mime), instagram_url });
+          result = await store.addMedia({ title, category_id: Number(req.body.category_id), filename, type: allowed.get(detected.mime), instagram_url, youtube_url });
         } catch (error) {
           // On a definitive DB rejection, remove the uploaded object. A network failure
           // may have committed the row: retain the file for reconciliation in that case.
@@ -138,12 +151,14 @@ export async function createApp({ store, email, password, secret, tempDir, produ
           throw error;
         }
         console.log('Upload complete:', req.uploadReference, 'media:', result.id);
-        res.status(201).json(result);
-      } catch (error) { next(error); }
+        uploadResult = result;
+      } catch (error) { uploadError = error; }
       finally {
         if (req.file?.path) await rm(req.file.path, { force: true }).catch(() => {});
         uploading = false;
       }
+      if (uploadError) next(uploadError);
+      else res.status(201).json(uploadResult);
     });
   });
   const engagementLimit = rateLimit({ windowMs: 60000, limit: 120, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Please wait a moment before trying again.' } });
@@ -163,11 +178,16 @@ export async function createApp({ store, email, password, secret, tempDir, produ
     }
     const result = await store.open(id, req.visitor);
     if (!result) throw problem(404, 'Media not found.');
-    res.json({ redirect: !result.first_view && result.instagram_url ? instagramURL(result.instagram_url) : null });
+    const redirect = result.first_view ? null : result.instagram_url ? instagramURL(result.instagram_url) : youtubeURL(result.youtube_url);
+    res.json({ redirect });
   });
   app.patch('/api/media/:id', auth, async (req, res) => {
     if (!validId(req.params.id)) throw problem(400, 'Invalid media.');
-    const result = await store.setInstagram(Number(req.params.id), instagramURL(req.body?.instagram_url));
+    const links = {};
+    if (Object.hasOwn(req.body || {}, 'instagram_url')) links.instagram_url = instagramURL(req.body.instagram_url);
+    if (Object.hasOwn(req.body || {}, 'youtube_url')) links.youtube_url = youtubeURL(req.body.youtube_url);
+    if (!Object.keys(links).length) throw problem(400, 'Provide an Instagram or YouTube link field.');
+    const result = await store.setLinks(Number(req.params.id), links);
     if (!result) throw problem(404, 'Media not found.');
     res.json(result);
   });

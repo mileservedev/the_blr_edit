@@ -123,6 +123,23 @@ test('Supabase schema, SDK, admin, media lifecycle and failure handling', { time
     assert.equal((await browserA(`/api/media/2147483647/open`, {})).status, 404);
     assert.equal((await updateLink('')).status, 200);
     assert.equal((await (await browserA(openRoute, {})).json()).redirect, null);
+    const youtube = 'https://youtu.be/abcdefghijk';
+    const updateYoutube = value => request('/api/media/' + mediaId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ youtube_url: value }) });
+    assert.equal((await updateYoutube('https://youtube.com.attacker.example/watch?v=abcdefghijk')).status, 400);
+    assert.equal((await updateYoutube('https://www.youtube.com/redirect?q=https://example.com')).status, 400);
+    assert.equal((await updateYoutube(youtube)).status, 200);
+    const browserC = visitor();
+    await browserC('/api/categories');
+    assert.equal((await (await browserC(openRoute, {})).json()).redirect, null);
+    assert.equal((await (await browserC(openRoute, {})).json()).redirect, youtube);
+    assert.equal((await updateLink(instagram)).status, 200);
+    assert.equal((await (await browserC(openRoute, {})).json()).redirect, instagram);
+    assert.equal((await updateLink('')).status, 200);
+    assert.equal((await (await browserC(openRoute, {})).json()).redirect, youtube); // Editing Instagram preserves YouTube.
+    assert.equal((await updateYoutube('https://www.youtube.com/shorts/abcdefghijk')).status, 200);
+    assert.equal((await (await browserC(openRoute, {})).json()).redirect, 'https://www.youtube.com/shorts/abcdefghijk');
+    assert.equal((await updateYoutube('')).status, 200);
+    assert.equal((await (await browserC(openRoute, {})).json()).redirect, null);
     // Simulate Hostinger process replacement; sessions and media remain in Supabase.
     await new Promise(resolve => server.close(resolve));
     server = await start(); base = `http://127.0.0.1:${server.address().port}`;
