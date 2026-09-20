@@ -111,7 +111,7 @@ test('Supabase schema, SDK, admin, media lifecycle and failure handling', { time
     assert.equal(Number((await (await browserB(likeRoute, { liked: true })).json()).likes), 2);
     assert.equal(Number((await (await browserA(likeRoute, { liked: false })).json()).likes), 1);
     assert.equal((await (await browserA(openRoute, {})).json()).redirect, null);
-    assert.equal((await (await browserA(openRoute, {})).json()).redirect, instagram);
+    assert.equal((await (await browserA(openRoute, {})).json()).redirect, null);
     assert.equal((await (await browserB(openRoute, {})).json()).redirect, null);
     const visitorGallery = await (await browserA('/api/media')).json();
     assert.equal(visitorGallery.items.find(m => m.id === mediaId).viewed, true);
@@ -131,13 +131,13 @@ test('Supabase schema, SDK, admin, media lifecycle and failure handling', { time
     const browserC = visitor();
     await browserC('/api/categories');
     assert.equal((await (await browserC(openRoute, {})).json()).redirect, null);
-    assert.equal((await (await browserC(openRoute, {})).json()).redirect, youtube);
+    assert.equal((await (await browserC(openRoute, {})).json()).redirect, null);
     assert.equal((await updateLink(instagram)).status, 200);
-    assert.equal((await (await browserC(openRoute, {})).json()).redirect, instagram);
+    assert.equal((await (await browserC(openRoute, {})).json()).redirect, null);
     assert.equal((await updateLink('')).status, 200);
-    assert.equal((await (await browserC(openRoute, {})).json()).redirect, youtube); // Editing Instagram preserves YouTube.
+    assert.equal((await (await browserC(openRoute, {})).json()).redirect, null); // Editing Instagram preserves YouTube.
     assert.equal((await updateYoutube('https://www.youtube.com/shorts/abcdefghijk')).status, 200);
-    assert.equal((await (await browserC(openRoute, {})).json()).redirect, 'https://www.youtube.com/shorts/abcdefghijk');
+    assert.equal((await (await browserC(openRoute, {})).json()).redirect, null);
     assert.equal((await updateYoutube('')).status, 200);
     assert.equal((await (await browserC(openRoute, {})).json()).redirect, null);
     // Simulate Hostinger process replacement; sessions and media remain in Supabase.

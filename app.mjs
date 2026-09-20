@@ -171,15 +171,15 @@ export async function createApp({ store, email, password, secret, tempDir, produ
   app.post('/api/media/:id/open', engagementLimit, async (req, res) => {
     if (!validId(req.params.id)) throw problem(400, 'Invalid media.');
     const id = Number(req.params.id);
-    // Administrators can review their uploads without being redirected.
+    // Administrators can preview without recording a public view.
     if (await sessionToken(req)) {
       if (!await store.media(id)) throw problem(404, 'Media not found.');
       return res.json({ redirect: null });
     }
     const result = await store.open(id, req.visitor);
     if (!result) throw problem(404, 'Media not found.');
-    const redirect = result.first_view ? null : result.instagram_url ? instagramURL(result.instagram_url) : youtubeURL(result.youtube_url);
-    res.json({ redirect });
+    // Keep every opening local; external viewing is an explicit link in the UI.
+    res.json({ redirect: null });
   });
   app.patch('/api/media/:id', auth, async (req, res) => {
     if (!validId(req.params.id)) throw problem(400, 'Invalid media.');

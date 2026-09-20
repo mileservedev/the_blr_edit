@@ -98,17 +98,10 @@ This change does not automatically migrate a previous SQLite database or local u
 - Supabase storage: https://supabase.com/docs/guides/storage/uploads/standard-uploads
 
 
-## Upload dates, likes, and Instagram repeat views
+## Upload dates, likes, and optional social links
 
-Run the updated `supabase/setup.sql` in your existing project's SQL Editor **before deploying this version**. It preserves media/categories and adds `media.instagram_url`, `media_engagement`, and three server-only functions. The old app remains compatible with the expanded schema. No new environment variables are needed.
+Cards and the viewer show upload dates. Visitors can like content using a signed browser cookie.
 
-Cards and the viewer show the original upload date in the visitor's local timezone. Visitors can like/unlike content; each browser has at most one active like per item. Likes and view history are stored in Supabase against a hash of a signed, HttpOnly browser cookie (one-year lifetime).
+Every opening displays the uploaded media locally, including repeat views. Add an optional Instagram link during upload or on an existing admin card to show Watch on Instagram on the card and in the viewer. The link opens a new tab only when clicked. If Instagram is absent, a provided YouTube link shows Watch on YouTube instead.
 
-Add an optional HTTPS Instagram link during upload, or use the admin card's Instagram link field to update existing content. The first opening in a browser displays media locally; subsequent openings navigate that tab to Instagram. An opening counts as a view, not completion of video playback. Content without an Instagram link continues opening locally. Signed-in administrators can preview locally without consuming a view or being redirected.
-
-This is a browser-based viewing experience, not DRM or account-level tracking: clearing cookies, using private browsing, switching devices, or rotating SESSION_SECRET resets visitor identity. Public Supabase URLs remain directly accessible. The database cannot establish a unique human identity without user accounts. Instagram availability and any Instagram login requirement are outside this app's control.
-
-
-### YouTube fallback for repeat views
-
-Rerun the latest `supabase/setup.sql` before deploying this update. It adds `media.youtube_url` without deleting existing content and updates the first-view function. Add a YouTube link during upload or edit it on an existing admin card. The first opening remains local; subsequent openings use Instagram when present, otherwise YouTube. Without either link, content remains local. Supports HTTPS YouTube watch, Shorts, live, embed and youtu.be video URLs. Editing one link through the API preserves the other. No new environment variables are required.
+YouTube supports HTTPS watch, Shorts, live, embed and youtu.be video links. Editing one link through the API preserves the other. Existing engagement data remains intact. This change needs no SQL migration or new environment variables.
