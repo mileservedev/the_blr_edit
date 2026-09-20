@@ -3,7 +3,7 @@ import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
 import multer from 'multer';
 import { fileTypeFromFile } from 'file-type';
-import { randomBytes, createHmac, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, createHash, createHmac, scryptSync, timingSafeEqual } from 'node:crypto';
 import { mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,14 @@ const allowed = new Map([
   ['video/mp4', 'video'], ['video/webm', 'video'],
 ]);
 const problem = (status, message) => Object.assign(new Error(message), { status });
+function instagramURL(value) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || value.length > 2048) throw problem(400, 'Enter a valid Instagram link.');
+  let url;
+  try { url = new URL(value.trim()); } catch { throw problem(400, 'Enter a full Instagram link beginning with https://.'); }
+  if (url.protocol !== 'https:' || !['instagram.com', 'www.instagram.com'].includes(url.hostname) || url.username || url.password || url.port) throw problem(400, 'Use an https://instagram.com or https://www.instagram.com link.');
+  return url.href;
+}
 const validId = value => /^\d+$/.test(String(value)) && Number(value) > 0 && Number(value) <= 2147483647;
 
 export async function createApp({ store, email, password, secret, tempDir, production = false, trustProxy = false }) {
@@ -34,6 +42,13 @@ export async function createApp({ store, email, password, secret, tempDir, produ
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.get('X-Gallery-Request') !== '1') {
       return res.status(403).json({ error: 'Invalid request origin.' });
     }
+    let visitorCookie = req.headers.cookie?.split(';').map(s => s.trim()).find(s => s.startsWith('gallery_visitor='))?.slice(16);
+    let [visitor = '', signature = ''] = (visitorCookie || '').split('.');
+    if (!/^[a-f0-9]{64}$/.test(visitor) || !/^[a-f0-9]{64}$/.test(signature) || !timingSafeEqual(Buffer.from(sign('visitor:' + visitor)), Buffer.from(signature))) {
+      visitor = randomBytes(32).toString('hex');
+      res.cookie('gallery_visitor', `${visitor}.${sign('visitor:' + visitor)}`, { httpOnly: true, secure: production, sameSite: 'lax', maxAge: 31536000000, path: '/' });
+    }
+    req.visitor = createHash('sha256').update(visitor).digest('hex');
     next();
   });
   async function sessionToken(req) {
@@ -81,9 +96,9 @@ export async function createApp({ store, email, password, secret, tempDir, produ
     res.json(await store.search({
       search_text: String(req.query.q || '').slice(0, 200), category_filter: category ? Number(category) : null,
       type_filter: type, requested_page: Math.min(2147483647, Math.max(1, parseInt(req.query.page, 10) || 1)),
-    }));
+    }, req.visitor));
   });
-  const upload = multer({ dest: tempDir, limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 2, fieldSize: 1024 } });
+  const upload = multer({ dest: tempDir, limits: { fileSize: MAX_UPLOAD_BYTES, files: 1, fields: 3, fieldSize: 2048 } });
   let uploading = false;
   app.post('/api/media', auth, (req, res, next) => {
     if (uploading) return res.status(429).json({ error: 'Another upload is in progress. Please try again shortly.' });
@@ -96,6 +111,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
       try {
         if (parseError) throw parseError;
         req.uploadStage = 'validating file';
+        const instagram_url = instagramURL(req.body.instagram_url);
         const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
         if (!req.file || !title || title.length > 120 || !validId(req.body.category_id)) {
           throw problem(400, 'Choose a category, file, and title of 1–120 characters.');
@@ -111,7 +127,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
         req.uploadStage = 'saving gallery record';
         let result;
         try {
-          result = await store.addMedia({ title, category_id: Number(req.body.category_id), filename, type: allowed.get(detected.mime) });
+          result = await store.addMedia({ title, category_id: Number(req.body.category_id), filename, type: allowed.get(detected.mime), instagram_url });
         } catch (error) {
           // On a definitive DB rejection, remove the uploaded object. A network failure
           // may have committed the row: retain the file for reconciliation in that case.
@@ -129,6 +145,31 @@ export async function createApp({ store, email, password, secret, tempDir, produ
         uploading = false;
       }
     });
+  });
+  const engagementLimit = rateLimit({ windowMs: 60000, limit: 120, standardHeaders: 'draft-8', legacyHeaders: false, message: { error: 'Please wait a moment before trying again.' } });
+  app.post('/api/media/:id/like', engagementLimit, async (req, res) => {
+    if (!validId(req.params.id) || typeof req.body?.liked !== 'boolean') throw problem(400, 'Invalid like request.');
+    const id = Number(req.params.id);
+    if (!await store.media(id)) throw problem(404, 'Media not found.');
+    res.json(await store.like(id, req.visitor, req.body.liked));
+  });
+  app.post('/api/media/:id/open', engagementLimit, async (req, res) => {
+    if (!validId(req.params.id)) throw problem(400, 'Invalid media.');
+    const id = Number(req.params.id);
+    // Administrators can review their uploads without being redirected.
+    if (await sessionToken(req)) {
+      if (!await store.media(id)) throw problem(404, 'Media not found.');
+      return res.json({ redirect: null });
+    }
+    const result = await store.open(id, req.visitor);
+    if (!result) throw problem(404, 'Media not found.');
+    res.json({ redirect: !result.first_view && result.instagram_url ? instagramURL(result.instagram_url) : null });
+  });
+  app.patch('/api/media/:id', auth, async (req, res) => {
+    if (!validId(req.params.id)) throw problem(400, 'Invalid media.');
+    const result = await store.setInstagram(Number(req.params.id), instagramURL(req.body?.instagram_url));
+    if (!result) throw problem(404, 'Media not found.');
+    res.json(result);
   });
   app.delete('/api/media/:id', auth, async (req, res) => {
     if (!validId(req.params.id)) throw problem(400, 'Invalid media.');

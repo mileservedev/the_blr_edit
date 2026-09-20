@@ -96,3 +96,14 @@ This change does not automatically migrate a previous SQLite database or local u
 - Hostinger Node deployment: https://www.hostinger.com/support/how-to-deploy-a-nodejs-website-in-hostinger/
 - Supabase API keys: https://supabase.com/docs/guides/getting-started/api-keys
 - Supabase storage: https://supabase.com/docs/guides/storage/uploads/standard-uploads
+
+
+## Upload dates, likes, and Instagram repeat views
+
+Run the updated `supabase/setup.sql` in your existing project's SQL Editor **before deploying this version**. It preserves media/categories and adds `media.instagram_url`, `media_engagement`, and three server-only functions. The old app remains compatible with the expanded schema. No new environment variables are needed.
+
+Cards and the viewer show the original upload date in the visitor's local timezone. Visitors can like/unlike content; each browser has at most one active like per item. Likes and view history are stored in Supabase against a hash of a signed, HttpOnly browser cookie (one-year lifetime).
+
+Add an optional HTTPS Instagram link during upload, or use the admin card's Instagram link field to update existing content. The first opening in a browser displays media locally; subsequent openings navigate that tab to Instagram. An opening counts as a view, not completion of video playback. Content without an Instagram link continues opening locally. Signed-in administrators can preview locally without consuming a view or being redirected.
+
+This is a browser-based viewing experience, not DRM or account-level tracking: clearing cookies, using private browsing, switching devices, or rotating SESSION_SECRET resets visitor identity. Public Supabase URLs remain directly accessible. The database cannot establish a unique human identity without user accounts. Instagram availability and any Instagram login requirement are outside this app's control.

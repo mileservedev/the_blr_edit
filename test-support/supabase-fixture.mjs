@@ -47,6 +47,19 @@ export async function startSupabaseFixture() {
   app.post('/rest/v1/rpc/:name', async (req, res, next) => {
     try {
       if (req.params.name === 'gallery_categories') return res.json((await db.query('select * from public.gallery_categories()')).rows);
+      const rpcArgs = {
+        gallery_engagement: ['item_ids', 'browser_id'],
+        gallery_like: ['item_id', 'browser_id', 'desired_like'],
+        gallery_open: ['item_id', 'browser_id'],
+      }[req.params.name];
+      if (rpcArgs) {
+        const params = rpcArgs.map(k => req.body[k]);
+        const sql = req.params.name === 'gallery_engagement'
+          ? 'select * from public.gallery_engagement($1,$2)'
+          : `select public.${req.params.name}(${rpcArgs.map((_,i)=>'$'+(i+1)).join(',')}) as result`;
+        const rows = (await db.query(sql,params)).rows;
+        return res.json(req.params.name === 'gallery_engagement' ? rows : rows[0].result);
+      }
       if (req.params.name !== 'gallery_search') return res.sendStatus(404);
       const b = req.body;
       const result = await db.query('select public.gallery_search($1,$2,$3,$4) as result', [b.search_text, b.category_filter, b.type_filter, b.requested_page]);
@@ -54,7 +67,7 @@ export async function startSupabaseFixture() {
     } catch (e) { next(e); }
   });
   const columns = {
-    sessions: ['token', 'expires'], categories: ['id', 'name'], media: ['id', 'title', 'category_id', 'filename', 'type', 'created_at'],
+    sessions: ['token', 'expires'], categories: ['id', 'name'], media: ['id', 'title', 'category_id', 'filename', 'type', 'created_at', 'instagram_url'],
   };
   app.all('/rest/v1/:table', async (req, res, next) => {
     try {
@@ -80,6 +93,11 @@ export async function startSupabaseFixture() {
         const keys = Object.keys(req.body);
         if (!keys.every(c => columns[table].includes(c))) throw new Error('Invalid columns');
         rows = (await db.query(`insert into public.${table} (${keys.join(',')}) values (${keys.map((_, i) => '$' + (i + 1)).join(',')}) returning *`, keys.map(k => req.body[k]))).rows;
+      } else if (req.method === 'PATCH') {
+        const keys = Object.keys(req.body);
+        if (!keys.every(c => columns[table].includes(c))) throw new Error('Invalid columns');
+        const sets = keys.map(k => { values.push(req.body[k]); return `${k}=$${values.length}`; });
+        rows = (await db.query(`update public.${table} set ${sets.join(',')}${where} returning *`, values)).rows;
       } else if (req.method === 'DELETE') {
         await db.query(`delete from public.${table}${where}`, values); return res.status(204).end();
       } else return res.sendStatus(405);
