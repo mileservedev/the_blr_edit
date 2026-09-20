@@ -1,6 +1,6 @@
 # The BLR Edit
 
-A Node.js photo/video gallery with an admin area, searchable categories, nine-item pagination, and a responsive gold, black and white design.
+The website companion to [@the.blr.edit](https://www.instagram.com/the.blr.edit/), focused on Bangalore food, experiences and lifestyle. Includes an admin area, searchable discoveries, nine-item pagination, and a responsive gold, black and white design. Instagram references are profile links; content is managed through the admin area, not automatically imported.
 
 ## Storage architecture
 
