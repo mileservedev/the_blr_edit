@@ -7,3 +7,5 @@
 
 .watch-link{display:inline-block;color:#89621f;font-size:13px;font-weight:600;text-underline-offset:4px;padding:8px 0}.watch-link:hover{color:#513b15}.watch-link:focus-visible{outline:2px solid #b48a3f;outline-offset:4px}
 textarea{width:100%;padding:12px;border:1px solid var(--line);font:inherit;resize:vertical;background:white}.card-description{margin:10px 0;color:var(--muted);font-size:14px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}.photo-count{font-size:12px;color:var(--muted)}.full-description{white-space:pre-wrap;line-height:1.7}.discovery-photos{display:grid;gap:16px;margin-top:24px}.discovery-photos img{width:100%;height:auto;max-height:none!important;object-fit:contain}
+
+.instagram-preview{width:100%;height:480px;border:0;background:white}.instagram-placeholder{display:block;padding:24px;color:#89621f;background:#f4ecd9}.card:has(.instagram-preview) .media-button{aspect-ratio:auto;min-height:70px}.card:has(.instagram-preview) .badge{display:none}

@@ -44,6 +44,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
   if (trustProxy) app.set('trust proxy', 1);
   app.use(helmet({ contentSecurityPolicy: { directives: {
     'img-src': ["'self'", 'data:', store.mediaOrigin],
+    'frame-src': ["'self'", 'https://www.instagram.com'],
     'media-src': ["'self'", store.mediaOrigin],
     'upgrade-insecure-requests': production ? [] : null,
   } }, strictTransportSecurity: production ? undefined : false }));
@@ -131,18 +132,19 @@ export async function createApp({ store, email, password, secret, tempDir, produ
         const description = typeof req.body.description === 'string' ? req.body.description.trim() : '';
         if (description.length > 2000) throw problem(400, 'Description must be at most 2,000 characters.');
         const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
-        if (!req.file || !title || title.length > 120 || !validId(req.body.category_id)) {
-          throw problem(400, 'Choose a category, file, and title of 1–120 characters.');
+        if ((!req.file && !instagram_url) || !title || title.length > 120 || !validId(req.body.category_id)) {
+          throw problem(400, 'Choose a category, a title of 1–120 characters, and a file or Instagram post link.');
         }
         if (!await store.category(Number(req.body.category_id))) throw problem(400, 'Choose an existing category.');
-        const files = [req.file, ...(req.files?.photos || [])];
+        if (!req.file && !/^https:\/\/(www\.)?instagram\.com\/(p|reel|reels)\/[A-Za-z0-9_-]+\/?(?:[?#].*)?$/.test(instagram_url)) throw problem(400, 'Use an Instagram reel or post link, not a profile link.');
+        const files = [req.file, ...(req.files?.photos || [])].filter(Boolean);
         if (files.reduce((sum, file) => sum + file.size, 0) > MAX_UPLOAD_BYTES) throw problem(400, 'Keep the combined upload within 50 MB.');
         const validated = [];
         for (const [index, file] of files.entries()) {
           const detected = await fileTypeFromFile(file.path).catch(() => null);
           if (['video/3gpp', 'video/3gpp2'].includes(detected?.mime)) throw problem(400, '3GP videos are not supported. Convert to MP4 (H.264/AAC) before uploading.');
           if (!allowed.has(detected?.mime)) throw problem(400, 'Upload a JPEG, PNG, WebP, MP4, or WebM file.');
-          if (index > 0 && allowed.get(detected.mime) !== 'photo') throw problem(400, 'Additional photos must be JPEG, PNG or WebP.');
+          if ((index > 0 || !req.file) && allowed.get(detected.mime) !== 'photo') throw problem(400, 'Additional photos must be JPEG, PNG or WebP.');
           validated.push({ file, detected, filename: `${randomBytes(24).toString('hex')}.${detected.ext}` });
         }
         req.uploadStage = 'saving files to Supabase Storage';
@@ -150,11 +152,12 @@ export async function createApp({ store, email, password, secret, tempDir, produ
           await store.upload(entry.filename, entry.file.path, entry.detected.mime);
           savedFiles.push(entry.filename);
         }
-        const { filename, detected } = validated[0];
+        const filename = req.file ? validated[0].filename : null;
+        const type = req.file ? allowed.get(validated[0].detected.mime) : /\/reels?\//.test(instagram_url) ? 'video' : 'photo';
         req.uploadStage = 'saving gallery record';
         let result;
         try {
-          result = await store.addMedia({ title, category_id: Number(req.body.category_id), filename, type: allowed.get(detected.mime), instagram_url, youtube_url, description, photos: savedFiles.slice(1) });
+          result = await store.addMedia({ title, category_id: Number(req.body.category_id), filename, type, instagram_url, youtube_url, description, photos: req.file ? savedFiles.slice(1) : savedFiles });
         } catch (error) {
           // A network failure may have committed the row; preserve all objects then.
           uncertainWrite = !/^\d{5}$/.test(error.code || '');
@@ -208,6 +211,9 @@ export async function createApp({ store, email, password, secret, tempDir, produ
       links.description = req.body.description.trim();
     }
     if (!Object.keys(links).length) throw problem(400, 'Provide an Instagram or YouTube link field.');
+    const existing = await store.media(Number(req.params.id));
+    if (!existing) throw problem(404, 'Media not found.');
+    if (!existing.filename && Object.hasOwn(links, 'instagram_url') && !/^https:\/\/(www\.)?instagram\.com\/(p|reel|reels)\/[A-Za-z0-9_-]+\/?(?:[?#].*)?$/.test(links.instagram_url || '')) throw problem(400, 'An Instagram-only discovery must keep a reel or post link.');
     const result = await store.setLinks(Number(req.params.id), links);
     if (!result) throw problem(404, 'Media not found.');
     res.json(result);
@@ -217,7 +223,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
     const item = await store.media(Number(req.params.id));
     if (!item) throw problem(404, 'Media not found.');
     // Retain the row on a storage error, allowing the administrator to retry.
-    for (const filename of [item.filename, ...(item.photos || [])]) await store.removeFile(filename);
+    for (const filename of [item.filename, ...(item.photos || [])].filter(Boolean)) await store.removeFile(filename);
     await store.deleteMedia(item.id);
     res.json({ ok: true });
   });

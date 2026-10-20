@@ -109,3 +109,7 @@ YouTube supports HTTPS watch, Shorts, live, embed and youtu.be video links. Edit
 ## Cafe discoveries with multiple photos
 
 Run the updated `supabase/setup.sql` before deploying this feature. It adds description and photos fields without deleting existing content. Upload one main video or photo and up to eight additional JPEG, PNG or WebP photos, with a combined limit of 50 MB. Add up to 2,000 characters describing the place or experience. The viewer displays the main media, description and additional photos together. Admin cards allow editing descriptions on existing posts. Deleting a discovery removes its main file and all additional photos.
+
+## Instagram-only discoveries
+
+Run setup.sql before deploying this update; it makes the main storage filename optional. Admins can submit a title, category and Instagram reel/post link without uploading a file. An Instagram iframe preview appears on cards and in the viewer, with a permanent Watch on Instagram link. Preview availability depends on Instagram, public visibility and embedding settings; it is not an extracted thumbnail. A photo may be uploaded as a custom cover. No Meta token is required by this implementation. Removing the Instagram link from a link-only entry is blocked.
