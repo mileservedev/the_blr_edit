@@ -14,7 +14,8 @@ function instagramPreview(m){
 }
 const instagramFrames=new ResizeObserver(entries=>{
   for(const {target,contentRect} of entries){
-    const scale=contentRect.width/400;
+    const limit=target.closest('dialog')?640:320;
+    const scale=Math.min(contentRect.width/400,limit/800);
     target.style.height=`${800*scale}px`;
     target.querySelector('iframe').style.transform=`translateX(-50%) scale(${scale})`;
   }
