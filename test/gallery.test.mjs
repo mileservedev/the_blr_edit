@@ -74,6 +74,12 @@ test('Supabase schema, SDK, admin, media lifecycle and failure handling', { time
     assert.deepEqual(await readdir(tempDir), []);
     for (let i = 0; i < 10; i++) assert.equal((await upload(`Moment ${i}`)).status, 201);
     const page = await (await request('/api/media')).json();
+    // Upload date, rather than insertion ID, determines the first page.
+    const olderIdItem = page.items[page.items.length - 1];
+    await fixture.db.query("update public.media set created_at = '2099-01-01T00:00:00Z' where id = $1", [olderIdItem.id]);
+    const reordered = await (await request('/api/media')).json();
+    assert.equal(reordered.items[0].id, olderIdItem.id);
+    await fixture.db.query('update public.media set created_at = $1 where id = $2', [olderIdItem.created_at, olderIdItem.id]);
     assert.equal(page.total, 10); assert.equal(page.items.length, 9); assert.equal(page.pages, 2);
     assert.equal((await (await request('/api/media?page=2')).json()).items.length, 1);
     assert.equal((await (await request('/api/media?q=Moment%203')).json()).total, 1);
