@@ -23,3 +23,6 @@ header .main-nav{align-items:center;gap:8px;flex-wrap:wrap}header .main-nav a,he
 
 /* Scale the whole Instagram document instead of cropping its viewport. */
 .instagram-frame{position:relative;width:100%;height:320px;overflow:hidden;background:#fff}.instagram-frame .instagram-preview{position:absolute;top:0;left:50%;width:400px;height:800px;max-width:none;transform:translateX(-50%) scale(.4);transform-origin:top center;border:0}dialog .instagram-frame{height:640px}
+
+/* Let portrait embeds use the full card width, with proportional height. */
+.instagram-frame{height:auto;aspect-ratio:1/2;max-width:400px;margin-inline:auto;background:white}dialog .instagram-frame{height:auto;max-width:400px}.card:has(.instagram-frame){align-self:start}.instagram-frame .instagram-preview{transform:translateX(-50%)}
