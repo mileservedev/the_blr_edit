@@ -63,6 +63,10 @@ test('Supabase schema, SDK, admin, media lifecycle and failure handling', { time
     assert.equal(discoveryItem.type, 'video');
     assert.equal(discoveryItem.photos.length, 2);
     assert.match(discoveryItem.description, /quiet courtyard/);
+    const descriptionMatches = await (await request('/api/media?q=courtyard')).json();
+    assert.equal(descriptionMatches.total, 1);
+    assert.equal(descriptionMatches.items[0].id, discoveryId);
+    assert.equal((await (await request('/api/media?q=COURTYARD')).json()).total, 1);
     for (const photo of discoveryItem.photos) assert.equal((await fetch(photo.url)).status, 200);
     assert.equal((await request('/api/media/' + discoveryId, { method: 'DELETE' })).status, 200);
     for (const photo of discoveryItem.photos) assert.equal((await fetch(photo.url)).status, 404);

@@ -69,7 +69,7 @@ begin
   -- strpos makes %, _, quotes and backslashes literal search characters.
   select count(*) into item_count
   from public.media m join public.categories c on c.id = m.category_id
-  where (strpos(lower(m.title), lower(search_text)) > 0 or strpos(lower(c.name), lower(search_text)) > 0)
+  where (strpos(lower(m.title), lower(search_text)) > 0 or strpos(lower(c.name), lower(search_text)) > 0 or strpos(lower(m.description), lower(search_text)) > 0)
     and (category_filter is null or m.category_id = category_filter)
     and (type_filter = '' or m.type = type_filter);
   page_count := greatest(1, (item_count + 8) / 9);
@@ -78,7 +78,7 @@ begin
   from (
     select m.*, c.name as category
     from public.media m join public.categories c on c.id = m.category_id
-    where (strpos(lower(m.title), lower(search_text)) > 0 or strpos(lower(c.name), lower(search_text)) > 0)
+    where (strpos(lower(m.title), lower(search_text)) > 0 or strpos(lower(c.name), lower(search_text)) > 0 or strpos(lower(m.description), lower(search_text)) > 0)
       and (category_filter is null or m.category_id = category_filter)
       and (type_filter = '' or m.type = type_filter)
     order by m.created_at desc, m.id desc limit 9 offset (current_page - 1) * 9
