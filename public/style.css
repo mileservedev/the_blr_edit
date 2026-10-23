@@ -26,6 +26,3 @@ header .main-nav{align-items:center;gap:8px;flex-wrap:wrap}header .main-nav a,he
 
 /* Let portrait embeds use the full card width, with proportional height. */
 .instagram-frame{height:auto;aspect-ratio:1/2;max-width:400px;margin-inline:auto;background:white}dialog .instagram-frame{height:auto;max-width:400px}.card:has(.instagram-frame){align-self:start}.instagram-frame .instagram-preview{transform:translateX(-50%)}
-
-/* Compact cover cards; Instagram's full embed loads only in the viewer. */
-.discovery-cover{display:flex;flex-direction:column;justify-content:space-between;width:100%;height:100%;padding:22px;color:#e1bd76;background:radial-gradient(ellipse at top right,#51412a,#171717 70%)}.discovery-cover>span{font-size:11px;letter-spacing:1.5px}.discovery-cover strong{font:26px/1.2 Georgia,serif;color:#fff;max-width:85%;overflow-wrap:anywhere}.discovery-cover>span:first-child{padding-right:65px}.details-button{display:block;width:100%;text-align:left;padding:8px 0;border:0;border-bottom:1px solid var(--line);background:transparent;color:#89621f;font-size:12px}.card .media-button:has(.discovery-cover) .badge{top:14px;left:auto;right:14px}
