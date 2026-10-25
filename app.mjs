@@ -48,7 +48,7 @@ export async function createApp({ store, email, password, secret, tempDir, produ
     'media-src': ["'self'", store.mediaOrigin],
     'upgrade-insecure-requests': production ? [] : null,
   } }, strictTransportSecurity: production ? undefined : false }));
-  app.use(express.json({ limit: '16kb' }));
+  app.use(express.json({ limit: '16kb', inflate: false }));
   app.use('/api', (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.get('X-Gallery-Request') !== '1') {
